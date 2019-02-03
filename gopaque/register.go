@@ -39,7 +39,7 @@ func (u *UserRegister) Complete(s *ServerRegisterInit) *UserRegisterComplete {
 		panic("No password, was init run?")
 	}
 	// Finish up OPRF
-	rwdU := oprfUserStep3(u.crypto, u.password, u.init.R, s.Beta)
+	rwdU := oprfUserStep3(u.crypto, u.password, u.init.R, s.V, s.Beta)
 	// Generate a key pair from rwdU seed
 	authEncKey := u.crypto.GenerateKey(rwdU)
 	// Generate the envelope by encrypting my pair and server pub w/ the OPRF result as the key
@@ -69,15 +69,15 @@ func NewServerRegister(crypto Crypto, key KeyPair) *ServerRegister {
 
 type ServerRegisterInit struct {
 	PublicKey []byte
+	V         kyber.Point
 	Beta      kyber.Point
 }
 
 func (s *ServerRegister) Init(u *UserRegisterInit) *ServerRegisterInit {
 	// Do server-side OPRF step
-	return &ServerRegisterInit{
-		PublicKey: s.key.PublicKeyBytes(),
-		Beta:      oprfServerStep2(u.Alpha, s.kU),
-	}
+	i := &ServerRegisterInit{PublicKey: s.key.PublicKeyBytes()}
+	i.V, i.Beta = oprfServerStep2(s.crypto, u.Alpha, s.kU)
+	return i
 }
 
 type ServerRegisterComplete struct {
