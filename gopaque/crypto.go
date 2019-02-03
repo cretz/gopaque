@@ -6,6 +6,7 @@ import (
 	"crypto/sha512"
 	"fmt"
 	"hash"
+	"io"
 
 	"go.dedis.ch/kyber"
 	"go.dedis.ch/kyber/suites"
@@ -19,7 +20,8 @@ type Crypto interface {
 
 	HashToPoint(msg []byte) kyber.Point
 	KeyFromBytes(key []byte) (KeyPair, error)
-	GenerateKey() KeyPair
+	// Empty seed means crypto/rand
+	GenerateKey(seed []byte) KeyPair
 	AuthEncrypt(key KeyPair, plain []byte) ([]byte, error)
 	AuthDecrypt(key KeyPair, enc []byte) ([]byte, error)
 }
@@ -30,10 +32,11 @@ type KeyPair interface {
 	PublicKeyBytes() []byte
 	PrivateKeyBytes() []byte
 	ToBytes() []byte
+	BytesSize() int
 }
 
 type Ed25519Crypto struct {
-	// Required
+	// Required. Hash should never be smaller than 32 (the gen key seed size)
 	suites.Suite
 	// If nil, uses Ed25519KeyDeriverDefault
 	Ed25519KeyDeriver
@@ -57,8 +60,18 @@ func (e *Ed25519Crypto) KeyFromBytes(key []byte) (KeyPair, error) {
 	return &Ed25519KeyPair{key[:ed25519.PublicKeySize], key[ed25519.PublicKeySize:]}, nil
 }
 
-func (e *Ed25519Crypto) GenerateKey() KeyPair {
-	pub, priv, err := ed25519.GenerateKey(nil)
+func (e *Ed25519Crypto) GenerateKey(seed []byte) KeyPair {
+	// If seed size is smaller than required, hash to get better size
+	if len(seed) > 0 && len(seed) < ed25519.SeedSize {
+		seedH := e.Hash()
+		seedH.Write(seed)
+		seed = seedH.Sum(nil)
+	}
+	var randR io.Reader
+	if len(seed) > 0 {
+		randR = bytes.NewReader(seed)
+	}
+	pub, priv, err := ed25519.GenerateKey(randR)
 	if err != nil {
 		panic(err)
 	}
@@ -88,6 +101,7 @@ func (e *Ed25519KeyPair) ToBytes() []byte {
 	copy(b[:ed25519.PublicKeySize], e.PrivateKey)
 	return b
 }
+func (e *Ed25519KeyPair) BytesSize() int { return ed25519.PublicKeySize + ed25519.PrivateKeySize }
 
 type Ed25519KeyDeriver interface {
 	DeriveKey(key *Ed25519KeyPair, info []byte) *Ed25519KeyPair
