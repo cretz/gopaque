@@ -1,15 +1,17 @@
-package gopaque
+package gopaque_test
 
 import (
 	"bytes"
-	"testing"
+
+	"github.com/cretz/gopaque/gopaque"
 )
 
-func TestRegisterAndAuth(t *testing.T) {
-	crypto := CryptoDefault
+// This simple example doesn't marshal the messages, just sends them back and forth.
+func Example_simple() {
+	crypto := gopaque.CryptoDefault
 	// Registration first...create user side and server side
-	userReg := NewUserRegister(crypto, []byte("user foo"))
-	serverReg := NewServerRegister(crypto, crypto.GenerateKey(nil))
+	userReg := gopaque.NewUserRegister(crypto, []byte("user foo"), nil)
+	serverReg := gopaque.NewServerRegister(crypto, crypto.GenerateKey(nil))
 	// Do the registration steps
 	userRegInit := userReg.Init([]byte("password foo"))
 	serverRegInit := serverReg.Init(userRegInit)
@@ -17,17 +19,19 @@ func TestRegisterAndAuth(t *testing.T) {
 	serverRegComplete := serverReg.Complete(userRegComplete)
 
 	// Now that we are registered, do an auth
-	userAuth := NewUserAuth(crypto, []byte("user foo"))
+	userAuth := gopaque.NewUserAuth(crypto, []byte("user foo"))
 	userAuthInit := userAuth.Init([]byte("password foo"))
-	serverAuthComplete := ServerAuth(crypto, userAuthInit, serverRegComplete)
+	serverAuthComplete := gopaque.ServerAuth(crypto, userAuthInit, serverRegComplete)
 	userAuthComplete, err := userAuth.Complete(serverAuthComplete)
 	if err != nil {
-		t.Fatal(err)
+		panic(err)
 	}
 
 	// Might as well check that the user key is the same as orig
-	userRegKey, userAuthKey := userReg.key.ToBytes(), userAuthComplete.Key.ToBytes()
+	userRegKey, userAuthKey := userReg.Key().ToBytes(), userAuthComplete.Key.ToBytes()
 	if !bytes.Equal(userRegKey, userAuthKey) {
-		t.Fatal("Key mismatch")
+		panic("Key mismatch")
 	}
+
+	// Output:
 }

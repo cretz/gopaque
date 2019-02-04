@@ -1,12 +1,14 @@
-package gopaque
+package gopaque_test
 
 import (
 	"bytes"
 	"testing"
+
+	"github.com/cretz/gopaque/gopaque"
 )
 
 func TestEd25519CryptoAuthEncrypt(t *testing.T) {
-	crypto := Ed25519CryptoDefault
+	crypto := gopaque.Ed25519CryptoDefault
 	key := crypto.GenerateKey(nil)
 	// Just enc some value then decrypt for now
 	plain := []byte("foo")
