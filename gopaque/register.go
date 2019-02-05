@@ -1,6 +1,8 @@
 package gopaque
 
 import (
+	"bytes"
+
 	"go.dedis.ch/kyber"
 )
 
@@ -11,27 +13,27 @@ import (
 // returns can then be used for Complete. The resulting value from Complete is
 // then passed back to the server to complete registration.
 type UserRegister struct {
-	crypto   Crypto
-	userID   []byte
-	key      KeyPair
-	password []byte
-	r        kyber.Scalar
+	crypto     Crypto
+	userID     []byte
+	privateKey kyber.Scalar
+	password   []byte
+	r          kyber.Scalar
 }
 
-// NewUserRegister creates a registration session for the given userID. If key
-// is nil (recommended), it is generated. A key should never be reused on
-// different registrations.
-func NewUserRegister(crypto Crypto, userID []byte, key KeyPair) *UserRegister {
-	if key == nil {
-		key = crypto.GenerateKey(nil)
+// NewUserRegister creates a registration session for the given userID. If
+// privateKey is nil (recommended), it is generated. A key should never be
+// reused on different registrations.
+func NewUserRegister(crypto Crypto, userID []byte, privateKey kyber.Scalar) *UserRegister {
+	if privateKey == nil {
+		privateKey = crypto.NewKey(nil)
 	}
-	return &UserRegister{crypto: crypto, userID: userID, key: key}
+	return &UserRegister{crypto: crypto, userID: userID, privateKey: privateKey}
 }
 
-// Key gives the key used during registration. This is often generated on
-// NewUserRegister. It is rarely needed because it comes back on authenticate
-// as well.
-func (u *UserRegister) Key() KeyPair { return u.key }
+// PrivateKey gives the key used during registration. This is often generated on
+// NewUserRegister. It is rarely needed because it comes back on authenticate as
+// well.
+func (u *UserRegister) PrivateKey() kyber.Scalar { return u.privateKey }
 
 // UserRegisterInit is the set of data to pass to the server after calling
 // UserRegister.Init. It implements encoding.BinaryMarshaller and
@@ -41,34 +43,21 @@ type UserRegisterInit struct {
 	Alpha  kyber.Point
 }
 
-// MarshalBinary implements encoding.BinaryMarshaller.
-func (u *UserRegisterInit) MarshalBinary() ([]byte, error) {
+// ToBytes implements Marshaler.ToBytes.
+func (u *UserRegisterInit) ToBytes() ([]byte, error) {
 	b := newBuf(nil)
 	b.WriteVarBytes(u.UserID)
-	if err := b.WritePoint(u.Alpha); err != nil {
-		return nil, err
-	}
-	return b.Bytes(), nil
+	err := b.WritePoint(u.Alpha)
+	return b.Bytes(), err
 }
 
-// UnmarshalBinary implements encoding.BinaryMarshaller. The Alpha field must
-// be non-nil before calling this. Otherwise, use FromBytes. This can return
+// FromBytes implements Marshaler.FromBytes. This can return
 // ErrUnmarshalMoreData if the data is too big.
-func (u *UserRegisterInit) UnmarshalBinary(data []byte) (err error) {
+func (u *UserRegisterInit) FromBytes(c Crypto, data []byte) (err error) {
 	b := newBuf(data)
-	if u.UserID, err = b.ReadVarBytes(); err == nil {
-		if err = b.ReadPoint(u.Alpha); err == nil {
-			err = b.AssertUnmarshalNoMoreData()
-		}
-	}
-	return
-}
-
-// FromBytes populates this from bytes. This can return ErrUnmarshalMoreData if
-// the data is too big.
-func (u *UserRegisterInit) FromBytes(crypto Crypto, data []byte) error {
-	u.Alpha = crypto.Point()
-	return u.UnmarshalBinary(data)
+	u.UserID, err = b.ReadVarBytes()
+	u.Alpha, err = b.ReadPointIfNotErr(c, err)
+	return b.AssertUnmarshalNoMoreDataIfNotErr(err)
 }
 
 // Init creates an init message for the password.
@@ -85,28 +74,25 @@ func (u *UserRegister) Init(password []byte) *UserRegisterInit {
 // Complete. It implements encoding.BinaryMarshaller and
 // encoding.BinaryUnmarshaller.
 type UserRegisterComplete struct {
-	EnvU []byte
-	PubU []byte
+	UserPublicKey kyber.Point
+	EnvU          []byte
 }
 
-// MarshalBinary implements encoding.BinaryMarshaller. Error is always nil.
-func (u *UserRegisterComplete) MarshalBinary() ([]byte, error) {
+// ToBytes implements Marshaler.ToBytes.
+func (u *UserRegisterComplete) ToBytes() ([]byte, error) {
 	b := newBuf(nil)
-	b.WriteVarBytes(u.EnvU)
-	b.WriteVarBytes(u.PubU)
-	return b.Bytes(), nil
+	err := b.WritePoint(u.UserPublicKey)
+	err = b.WriteVarBytesIfNotErr(err, u.EnvU)
+	return b.Bytes(), err
 }
 
-// UnmarshalBinary implements encoding.BinaryMarshaller. This can return
+// FromBytes implements Marshaler.FromBytes. This can return
 // ErrUnmarshalMoreData if the data is too big.
-func (u *UserRegisterComplete) UnmarshalBinary(data []byte) (err error) {
+func (u *UserRegisterComplete) FromBytes(c Crypto, data []byte) (err error) {
 	b := newBuf(data)
-	if u.EnvU, err = b.ReadVarBytes(); err == nil {
-		if u.PubU, err = b.ReadVarBytes(); err == nil {
-			err = b.AssertUnmarshalNoMoreData()
-		}
-	}
-	return
+	u.UserPublicKey, err = b.ReadPoint(c)
+	u.EnvU, err = b.ReadVarBytesIfNotErr(err)
+	return b.AssertUnmarshalNoMoreDataIfNotErr(err)
 }
 
 // Complete is called after receiving the server init results. The result of
@@ -118,14 +104,14 @@ func (u *UserRegister) Complete(s *ServerRegisterInit) *UserRegisterComplete {
 	// Finish up OPRF
 	rwdU := OPRFUserStep3(u.crypto, u.password, u.r, s.V, s.Beta)
 	// Generate a key pair from rwdU seed
-	authEncKey := u.crypto.GenerateKey(rwdU)
+	authEncKey := u.crypto.NewKeyFromReader(bytes.NewReader(rwdU))
 	// Generate the envelope by encrypting my pair and server pub w/ the OPRF result as the key
-	plain := append(u.key.ToBytes(), s.PublicKey...)
+	plain := append(unsafeMarshal(u.privateKey), unsafeMarshal(s.ServerPublicKey)...)
 	envU, err := u.crypto.AuthEncrypt(authEncKey, plain)
 	if err != nil {
 		panic(err)
 	}
-	return &UserRegisterComplete{EnvU: envU, PubU: u.key.PublicKeyBytes()}
+	return &UserRegisterComplete{UserPublicKey: u.crypto.Point().Mul(u.privateKey, nil), EnvU: envU}
 }
 
 // ServerRegister is the server-side session for registration with a user. This
@@ -135,62 +121,45 @@ func (u *UserRegister) Complete(s *ServerRegisterInit) *UserRegisterComplete {
 // next value should be passed to Complete and the results of Complete should
 // be stored by the server.
 type ServerRegister struct {
-	crypto Crypto
-	key    KeyPair
-	kU     kyber.Scalar
-	userID []byte
+	crypto     Crypto
+	privateKey kyber.Scalar
+	kU         kyber.Scalar
+	userID     []byte
 }
 
 // NewServerRegister creates a ServerRegister with the given key. The key can
 // be the same as used for other registrations.
-func NewServerRegister(crypto Crypto, key KeyPair) *ServerRegister {
+func NewServerRegister(crypto Crypto, privateKey kyber.Scalar) *ServerRegister {
 	return &ServerRegister{
-		crypto: crypto,
-		key:    key,
-		kU:     crypto.Scalar().Pick(crypto.RandomStream()),
+		crypto:     crypto,
+		privateKey: privateKey,
+		kU:         crypto.Scalar().Pick(crypto.RandomStream()),
 	}
 }
 
 // ServerRegisterInit is the result of Init to be passed to the user. It
 // implements encoding.BinaryMarshaller and encoding.BinaryUnmarshaller.
 type ServerRegisterInit struct {
-	PublicKey []byte
-	V         kyber.Point
-	Beta      kyber.Point
+	ServerPublicKey kyber.Point
+	V               kyber.Point
+	Beta            kyber.Point
 }
 
-// MarshalBinary implements encoding.BinaryMarshaller.
-func (s *ServerRegisterInit) MarshalBinary() ([]byte, error) {
+// ToBytes implements Marshaler.ToBytes.
+func (s *ServerRegisterInit) ToBytes() ([]byte, error) {
 	b := newBuf(nil)
-	b.WriteVarBytes(s.PublicKey)
-	if err := b.WritePoint(s.V); err != nil {
-		return nil, err
-	} else if err = b.WritePoint(s.Beta); err != nil {
-		return nil, err
-	}
-	return b.Bytes(), nil
+	err := b.WritePoint(s.ServerPublicKey, s.V, s.Beta)
+	return b.Bytes(), err
 }
 
-// UnmarshalBinary implements encoding.BinaryMarshaller. The V and Beta fields
-// must be non-nil before calling this. Otherwise, use FromBytes.  This can
-// return ErrUnmarshalMoreData if the data is too big.
-func (s *ServerRegisterInit) UnmarshalBinary(data []byte) (err error) {
+// FromBytes implements Marshaler.FromBytes. This can return
+// ErrUnmarshalMoreData if the data is too big.
+func (s *ServerRegisterInit) FromBytes(c Crypto, data []byte) (err error) {
 	b := newBuf(data)
-	if s.PublicKey, err = b.ReadVarBytes(); err == nil {
-		if err = b.ReadPoint(s.V); err == nil {
-			if err = b.ReadPoint(s.Beta); err == nil {
-				err = b.AssertUnmarshalNoMoreData()
-			}
-		}
-	}
-	return
-}
-
-// FromBytes populates this from bytes. This can return ErrUnmarshalMoreData if
-// the data is too big.
-func (s *ServerRegisterInit) FromBytes(crypto Crypto, data []byte) error {
-	s.V, s.Beta = crypto.Point(), crypto.Point()
-	return s.UnmarshalBinary(data)
+	s.ServerPublicKey, err = b.ReadPoint(c)
+	s.V, err = b.ReadPointIfNotErr(c, err)
+	s.Beta, err = b.ReadPointIfNotErr(c, err)
+	return b.AssertUnmarshalNoMoreDataIfNotErr(err)
 }
 
 // Init is called with the first data received from the user side. The response
@@ -199,7 +168,7 @@ func (s *ServerRegister) Init(u *UserRegisterInit) *ServerRegisterInit {
 	// Store the user ID
 	s.userID = u.UserID
 	// Do server-side OPRF step
-	i := &ServerRegisterInit{PublicKey: s.key.PublicKeyBytes()}
+	i := &ServerRegisterInit{ServerPublicKey: s.crypto.Point().Mul(s.privateKey, nil)}
 	i.V, i.Beta = OPRFServerStep2(s.crypto, u.Alpha, s.kU)
 	return i
 }
@@ -209,14 +178,21 @@ func (s *ServerRegister) Init(u *UserRegisterInit) *ServerRegisterInit {
 type ServerRegisterComplete struct {
 	UserID []byte
 	// Same as given originally, can be global
-	Key        KeyPair
-	EnvU, PubU []byte
-	KU         kyber.Scalar
+	ServerPrivateKey kyber.Scalar
+	UserPublicKey    kyber.Point
+	EnvU             []byte
+	KU               kyber.Scalar
 }
 
 // Complete takes the last info from the user and returns a st of data that
 // must be stored by the server.
 func (s *ServerRegister) Complete(u *UserRegisterComplete) *ServerRegisterComplete {
 	// Just return the stuff as complete
-	return &ServerRegisterComplete{UserID: s.userID, Key: s.key, EnvU: u.EnvU, PubU: u.PubU, KU: s.kU}
+	return &ServerRegisterComplete{
+		UserID:           s.userID,
+		ServerPrivateKey: s.privateKey,
+		UserPublicKey:    u.UserPublicKey,
+		EnvU:             u.EnvU,
+		KU:               s.kU,
+	}
 }

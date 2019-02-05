@@ -7,8 +7,12 @@ can be found at this article:
 [Kyber](https://github.com/dedis/kyber) library to implement
 [this pending RFC](https://tools.ietf.org/html/draft-krawczyk-cfrg-opaque-01) using elliptic curves.
 
-The [Godoc](https://godoc.org/github.com/cretz/gopaque/gopaque) contains the API and sme examples. More involved
-examples are in the [examples](examples/) folder.
+The [Godoc](https://godoc.org/github.com/cretz/gopaque/gopaque) contains the API and some examples.
 
 **WARNING: This is a trivial implementation, the author is not a cryptographer, and the code has not been reviewed. Use
 at your own risk.**
+
+Other known OPAQUE implementations:
+
+* https://github.com/frekui/opaque (Go)
+* https://github.com/stef/libsphinx (C)

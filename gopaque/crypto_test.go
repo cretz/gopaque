@@ -7,9 +7,9 @@ import (
 	"github.com/cretz/gopaque/gopaque"
 )
 
-func TestEd25519CryptoAuthEncrypt(t *testing.T) {
-	crypto := gopaque.Ed25519CryptoDefault
-	key := crypto.GenerateKey(nil)
+func TestCryptoAuthEncrypt(t *testing.T) {
+	crypto := gopaque.CryptoDefault
+	key := crypto.NewKey(nil)
 	// Just enc some value then decrypt for now
 	plain := []byte("foo")
 	if encBytes, err := crypto.AuthEncrypt(key, plain); err != nil {

@@ -1,13 +1,13 @@
 package gopaque_test
 
 import (
-	"bytes"
 	"encoding/binary"
 	"fmt"
 	"io"
 	"net"
 
 	"github.com/cretz/gopaque/gopaque"
+	"go.dedis.ch/kyber"
 )
 
 // This example is just a simple user registration with in-memory user-side and server-side sessions.
@@ -42,7 +42,7 @@ func Example_withConnPipe() {
 	}
 
 	// Confirm the key pair is what we registered with
-	if !bytes.Equal(key.ToBytes(), authInfo.Key.ToBytes()) {
+	if !key.Equal(authInfo.UserPrivateKey) {
 		panic("Invalid key")
 	}
 
@@ -51,27 +51,23 @@ func Example_withConnPipe() {
 
 var crypto = gopaque.CryptoDefault
 
-func UserSideRegister(c net.Conn, username, password string) (gopaque.KeyPair, error) {
+func UserSideRegister(c net.Conn, username, password string) (kyber.Scalar, error) {
 	// Create a registration session...
 	userReg := gopaque.NewUserRegister(crypto, []byte(username), nil)
 
 	// Create init message and send it over
-	initBytes, _ := userReg.Init([]byte(password)).MarshalBinary()
-	if err := sendMessage(c, 'r', initBytes); err != nil {
+	if err := sendMessage(c, 'r', userReg.Init([]byte(password))); err != nil {
 		return nil, err
 	}
 
 	// Receive the server message
 	var serverInit gopaque.ServerRegisterInit
-	if _, serverInitBytes, err := recvMessage(c); err != nil {
-		return nil, err
-	} else if err = serverInit.FromBytes(crypto, serverInitBytes); err != nil {
+	if err := recvMessage(c, &serverInit); err != nil {
 		return nil, err
 	}
 
 	// Create user complete message and send it over, then we're done
-	completeBytes, _ := userReg.Complete(&serverInit).MarshalBinary()
-	return userReg.Key(), sendMessage(c, 'r', completeBytes)
+	return userReg.PrivateKey(), sendMessage(c, 'r', userReg.Complete(&serverInit))
 }
 
 func UserSideAuth(c net.Conn, username, password string) (*gopaque.UserAuthComplete, error) {
@@ -79,16 +75,13 @@ func UserSideAuth(c net.Conn, username, password string) (*gopaque.UserAuthCompl
 	userAuth := gopaque.NewUserAuth(crypto, []byte(username))
 
 	// Create init message and send it over
-	initBytes, _ := userAuth.Init([]byte(password)).MarshalBinary()
-	if err := sendMessage(c, 'a', initBytes); err != nil {
+	if err := sendMessage(c, 'a', userAuth.Init([]byte(password))); err != nil {
 		return nil, err
 	}
 
 	// Receive the server message
 	var serverComplete gopaque.ServerAuthComplete
-	if _, serverCompleteBytes, err := recvMessage(c); err != nil {
-		return nil, err
-	} else if err = serverComplete.FromBytes(crypto, serverCompleteBytes); err != nil {
+	if err := recvMessage(c, &serverComplete); err != nil {
 		return nil, err
 	}
 
@@ -100,11 +93,11 @@ func RunServer(c net.Conn) error {
 	// This stores the registered users
 	registeredUsers := map[string]*gopaque.ServerRegisterComplete{}
 	// Create a key pair for our server
-	key := crypto.GenerateKey(nil)
+	key := crypto.NewKey(nil)
 	// Run forever handling register and auth
 	for {
 		// Get the next user message
-		msgType, msg, err := recvMessage(c)
+		msgType, msgBytes, err := recvMessageBytes(c)
 		if err != nil {
 			return err
 		}
@@ -112,7 +105,7 @@ func RunServer(c net.Conn) error {
 		switch msgType {
 		// Handle registration...
 		case 'r':
-			if regComplete, err := ServerSideRegister(c, key, msg); err != nil {
+			if regComplete, err := ServerSideRegister(c, key, msgBytes); err != nil {
 				return err
 			} else if username := string(regComplete.UserID); registeredUsers[username] != nil {
 				return fmt.Errorf("Username '%v' already exists", username)
@@ -121,7 +114,7 @@ func RunServer(c net.Conn) error {
 			}
 			// Handle auth...
 		case 'a':
-			if err := ServerSideAuth(c, msg, registeredUsers); err != nil {
+			if err := ServerSideAuth(c, msgBytes, registeredUsers); err != nil {
 				return err
 			}
 		default:
@@ -130,23 +123,19 @@ func RunServer(c net.Conn) error {
 	}
 }
 
-func ServerSideRegister(c net.Conn, key gopaque.KeyPair, userInitBytes []byte) (*gopaque.ServerRegisterComplete, error) {
+func ServerSideRegister(c net.Conn, key kyber.Scalar, userInitBytes []byte) (*gopaque.ServerRegisterComplete, error) {
 	// Create the registration session
 	serverReg := gopaque.NewServerRegister(crypto, key)
 	// Unmarshal user init, create server init, and send back
 	var userInit gopaque.UserRegisterInit
 	if err := userInit.FromBytes(crypto, userInitBytes); err != nil {
 		return nil, err
-	}
-	serverInitBytes, _ := serverReg.Init(&userInit).MarshalBinary()
-	if err := sendMessage(c, 'r', serverInitBytes); err != nil {
+	} else if err = sendMessage(c, 'r', serverReg.Init(&userInit)); err != nil {
 		return nil, err
 	}
 	// Get back the user complete and complete things ourselves
 	var userComplete gopaque.UserRegisterComplete
-	if _, userCompleteBytes, err := recvMessage(c); err != nil {
-		return nil, err
-	} else if err = userComplete.UnmarshalBinary(userCompleteBytes); err != nil {
+	if err := recvMessage(c, &userComplete); err != nil {
 		return nil, err
 	}
 	return serverReg.Complete(&userComplete), nil
@@ -164,22 +153,33 @@ func ServerSideAuth(c net.Conn, userInitBytes []byte, registeredUsers map[string
 		return fmt.Errorf("Username not found")
 	}
 	// Complete the auth and send it back
-	authCompleteBytes, _ := gopaque.ServerAuth(crypto, &userInit, regComplete).MarshalBinary()
-	return sendMessage(c, 'a', authCompleteBytes)
+	return sendMessage(c, 'a', gopaque.ServerAuth(crypto, &userInit, regComplete))
 }
 
 // Below is just a very simple, insecure conn messager
 
-func sendMessage(c net.Conn, msgType byte, msg []byte) (err error) {
-	if _, err = c.Write([]byte{msgType}); err == nil {
-		if err = binary.Write(c, binary.BigEndian, uint32(len(msg))); err == nil {
-			_, err = c.Write(msg)
-		}
+func sendMessage(c net.Conn, msgType byte, msg gopaque.Marshaler) error {
+	if msgBytes, err := msg.ToBytes(); err != nil {
+		return err
+	} else if _, err = c.Write([]byte{msgType}); err != nil {
+		return err
+	} else if err = binary.Write(c, binary.BigEndian, uint32(len(msgBytes))); err != nil {
+		return err
+	} else if _, err = c.Write(msgBytes); err != nil {
+		return err
 	}
-	return
+	return nil
 }
 
-func recvMessage(c net.Conn) (msgType byte, msg []byte, err error) {
+func recvMessage(c net.Conn, msg gopaque.Marshaler) error {
+	if _, msgBytes, err := recvMessageBytes(c); err != nil {
+		return err
+	} else {
+		return msg.FromBytes(crypto, msgBytes)
+	}
+}
+
+func recvMessageBytes(c net.Conn) (msgType byte, msg []byte, err error) {
 	typeAndSize := make([]byte, 5)
 	if _, err = io.ReadFull(c, typeAndSize); err == nil {
 		msgType = typeAndSize[0]
