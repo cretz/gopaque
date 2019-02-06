@@ -19,7 +19,9 @@ import (
 	"golang.org/x/crypto/hkdf"
 )
 
-// KyberSuiteDefault is the recommended default kyber.Suite impl.
+// KyberSuiteDefault is the recommended default kyber.Suite impl. This uses the
+// Ed25519 suite which, based on reading, should satisfy the prime-order
+// requirement.
 var KyberSuiteDefault = suites.MustFind("Ed25519")
 
 // CryptoDefault is the recommended default Crypto impl.

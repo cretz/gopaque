@@ -86,7 +86,7 @@ type UserAuthFinish struct {
 }
 
 // UserAuthComplete is sent back to the server to complete auth if needed. It
-// implements Marshaler/
+// implements Marshaler.
 type UserAuthComplete struct {
 	EmbeddedKeyExchangeMessage3 []byte
 }
