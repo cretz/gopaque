@@ -15,7 +15,8 @@ import (
 // considered 3-step.
 //
 // While implementers will implement all methods, callers should only call the
-// User* or Server* methods depending on which side they are on.
+// User* or Server* methods depending on which side they are on. The key
+// exchange should be created for each use and never reused.
 type KeyExchange interface {
 	// UserKeyExchange1 runs on the user side and returns the first key exchange
 	// value to send to server (or nil if there is none).

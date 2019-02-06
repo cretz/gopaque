@@ -10,8 +10,8 @@ import (
 	"go.dedis.ch/kyber"
 )
 
-// This example is just a simple user registration with in-memory user-side and
-// server-side sessions.
+// This example is a more complex example showing marshalling and using separate
+// user and server-side connections.
 func Example_withConnPipe() {
 	// Create already-connected user/server pipe and a bool to tell when closed
 	userConn, serverConn := net.Pipe()
@@ -30,7 +30,7 @@ func Example_withConnPipe() {
 	}()
 
 	// Register a user. The returned key is just for checking later for this
-	// example. In general // there is no reason to keep it around as it's sent
+	// example. In general there is no reason to keep it around as it's sent
 	// back on auth.
 	key, err := UserSideRegister(userConn, "myuser", "mypass")
 	if err != nil {
