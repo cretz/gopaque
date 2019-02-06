@@ -130,7 +130,7 @@ func ServerAuth(crypto Crypto, u *UserAuthInit, s *ServerRegisterComplete) *Serv
 	if !bytes.Equal(u.UserID, s.UserID) {
 		panic("Mismatched user IDs")
 	}
-	complete := &ServerAuthComplete{ServerPublicKey: crypto.Point().Mul(s.ServerPrivateKey, nil), EnvU: s.EnvU}
+	complete := &ServerAuthComplete{ServerPublicKey: pubKey(crypto, s.ServerPrivateKey), EnvU: s.EnvU}
 	complete.V, complete.Beta = OPRFServerStep2(crypto, u.Alpha, s.KU)
 	return complete
 }

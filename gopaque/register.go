@@ -106,12 +106,12 @@ func (u *UserRegister) Complete(s *ServerRegisterInit) *UserRegisterComplete {
 	// Generate a key pair from rwdU seed
 	authEncKey := u.crypto.NewKeyFromReader(bytes.NewReader(rwdU))
 	// Generate the envelope by encrypting my pair and server pub w/ the OPRF result as the key
-	plain := append(unsafeMarshal(u.privateKey), unsafeMarshal(s.ServerPublicKey)...)
+	plain := append(toBytes(u.privateKey), toBytes(s.ServerPublicKey)...)
 	envU, err := u.crypto.AuthEncrypt(authEncKey, plain)
 	if err != nil {
 		panic(err)
 	}
-	return &UserRegisterComplete{UserPublicKey: u.crypto.Point().Mul(u.privateKey, nil), EnvU: envU}
+	return &UserRegisterComplete{UserPublicKey: pubKey(u.crypto, u.privateKey), EnvU: envU}
 }
 
 // ServerRegister is the server-side session for registration with a user. This
@@ -168,7 +168,7 @@ func (s *ServerRegister) Init(u *UserRegisterInit) *ServerRegisterInit {
 	// Store the user ID
 	s.userID = u.UserID
 	// Do server-side OPRF step
-	i := &ServerRegisterInit{ServerPublicKey: s.crypto.Point().Mul(s.privateKey, nil)}
+	i := &ServerRegisterInit{ServerPublicKey: pubKey(s.crypto, s.privateKey)}
 	i.V, i.Beta = OPRFServerStep2(s.crypto, u.Alpha, s.kU)
 	return i
 }

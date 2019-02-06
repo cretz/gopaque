@@ -2,25 +2,18 @@ package gopaque
 
 import (
 	"bytes"
-	"encoding"
 	"encoding/binary"
 	"io"
 
 	"go.dedis.ch/kyber"
 )
 
-func unsafeMarshal(s encoding.BinaryMarshaler) []byte {
-	// Panic on err
-	b, err := s.MarshalBinary()
-	if err != nil {
-		panic(err)
-	}
-	return b
-}
-
+// Marshaler is implemented by any message that can be marshaled to/from bytes.
 type Marshaler interface {
+	// ToBytes converts this to a byte slice.
 	ToBytes() ([]byte, error)
-	// FromBytes implements Marshaler.FromBytes. This can return
+
+	// FromBytes populates this from a byte slice. This can return
 	// ErrUnmarshalMoreData if the data is too big.
 	FromBytes(Crypto, []byte) error
 }
