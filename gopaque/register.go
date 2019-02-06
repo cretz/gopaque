@@ -36,8 +36,7 @@ func NewUserRegister(crypto Crypto, userID []byte, privateKey kyber.Scalar) *Use
 func (u *UserRegister) PrivateKey() kyber.Scalar { return u.privateKey }
 
 // UserRegisterInit is the set of data to pass to the server after calling
-// UserRegister.Init. It implements encoding.BinaryMarshaller and
-// encoding.BinaryUnmarshaller.
+// UserRegister.Init. It implements Marshaler.
 type UserRegisterInit struct {
 	UserID []byte
 	Alpha  kyber.Point
@@ -71,8 +70,7 @@ func (u *UserRegister) Init(password []byte) *UserRegisterInit {
 }
 
 // UserRegisterComplete is the set of data to pass to the server after calling
-// Complete. It implements encoding.BinaryMarshaller and
-// encoding.BinaryUnmarshaller.
+// Complete. It implements Marshaler.
 type UserRegisterComplete struct {
 	UserPublicKey kyber.Point
 	EnvU          []byte
@@ -138,7 +136,7 @@ func NewServerRegister(crypto Crypto, privateKey kyber.Scalar) *ServerRegister {
 }
 
 // ServerRegisterInit is the result of Init to be passed to the user. It
-// implements encoding.BinaryMarshaller and encoding.BinaryUnmarshaller.
+// implements Marshaler.
 type ServerRegisterInit struct {
 	ServerPublicKey kyber.Point
 	V               kyber.Point

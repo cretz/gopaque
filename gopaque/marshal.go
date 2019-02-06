@@ -10,7 +10,8 @@ import (
 
 // Marshaler is implemented by any message that can be marshaled to/from bytes.
 type Marshaler interface {
-	// ToBytes converts this to a byte slice.
+	// ToBytes converts this to a byte slice. If successful should always have
+	// at least one byte.
 	ToBytes() ([]byte, error)
 
 	// FromBytes populates this from a byte slice. This can return

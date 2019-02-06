@@ -10,7 +10,8 @@ import (
 	"go.dedis.ch/kyber"
 )
 
-// This example is just a simple user registration with in-memory user-side and server-side sessions.
+// This example is just a simple user registration with in-memory user-side and
+// server-side sessions.
 func Example_withConnPipe() {
 	// Create already-connected user/server pipe and a bool to tell when closed
 	userConn, serverConn := net.Pipe()
@@ -28,15 +29,17 @@ func Example_withConnPipe() {
 		}
 	}()
 
-	// Register a user. The returned key is just for checking later, in general there is no
-	// reason to retrieve it or keep it around as it's sent back on auth.
+	// Register a user. The returned key is just for checking later for this
+	// example. In general // there is no reason to keep it around as it's sent
+	// back on auth.
 	key, err := UserSideRegister(userConn, "myuser", "mypass")
 	if err != nil {
 		panic(err)
 	}
 
-	// Now auth the user
-	authInfo, err := UserSideAuth(userConn, "myuser", "mypass")
+	// Now auth the user. We are ignoring the returned key exchange info here
+	// but could capture it and use it's shared secret if we wanted.
+	authInfo, _, err := UserSideAuth(userConn, "myuser", "mypass")
 	if err != nil {
 		panic(err)
 	}
@@ -52,7 +55,7 @@ func Example_withConnPipe() {
 var crypto = gopaque.CryptoDefault
 
 func UserSideRegister(c net.Conn, username, password string) (kyber.Scalar, error) {
-	// Create a registration session...
+	// Create a registration session
 	userReg := gopaque.NewUserRegister(crypto, []byte(username), nil)
 
 	// Create init message and send it over
@@ -70,23 +73,33 @@ func UserSideRegister(c net.Conn, username, password string) (kyber.Scalar, erro
 	return userReg.PrivateKey(), sendMessage(c, 'r', userReg.Complete(&serverInit))
 }
 
-func UserSideAuth(c net.Conn, username, password string) (*gopaque.UserAuthComplete, error) {
-	// Create auth session...
-	userAuth := gopaque.NewUserAuth(crypto, []byte(username))
+func UserSideAuth(c net.Conn, username, password string) (*gopaque.UserAuthFinish, *gopaque.KeyExchangeSigma, error) {
+	// Create auth session w/ built in key exchange
+	kex := gopaque.NewKeyExchangeSigma(crypto)
+	userAuth := gopaque.NewUserAuth(crypto, []byte(username), kex)
 
 	// Create init message and send it over
-	if err := sendMessage(c, 'a', userAuth.Init([]byte(password))); err != nil {
-		return nil, err
+	if userInit, err := userAuth.Init([]byte(password)); err != nil {
+		return nil, nil, err
+	} else if err = sendMessage(c, 'a', userInit); err != nil {
+		return nil, nil, err
 	}
 
 	// Receive the server message
 	var serverComplete gopaque.ServerAuthComplete
 	if err := recvMessage(c, &serverComplete); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	// No more sending, just verify on user side and return
-	return userAuth.Complete(&serverComplete)
+	// Verify user side and since we embedded a key exchange, there is one last
+	// message to send to the server.
+	if userFinish, userComplete, err := userAuth.Complete(&serverComplete); err != nil {
+		return nil, nil, err
+	} else if err = sendMessage(c, 'a', userComplete); err != nil {
+		return nil, nil, err
+	} else {
+		return userFinish, kex, nil
+	}
 }
 
 func RunServer(c net.Conn) error {
@@ -142,6 +155,9 @@ func ServerSideRegister(c net.Conn, key kyber.Scalar, userInitBytes []byte) (*go
 }
 
 func ServerSideAuth(c net.Conn, userInitBytes []byte, registeredUsers map[string]*gopaque.ServerRegisterComplete) error {
+	// Create the server auth w/ an embedded key exchange. We could store this
+	// key exchange if we wanted access to the shared secret afterwards.
+	serverAuth := gopaque.NewServerAuth(crypto, gopaque.NewKeyExchangeSigma(crypto))
 	// Parse the user init bytes
 	var userInit gopaque.UserAuthInit
 	if err := userInit.FromBytes(crypto, userInitBytes); err != nil {
@@ -153,7 +169,18 @@ func ServerSideAuth(c net.Conn, userInitBytes []byte, registeredUsers map[string
 		return fmt.Errorf("Username not found")
 	}
 	// Complete the auth and send it back
-	return sendMessage(c, 'a', gopaque.ServerAuth(crypto, &userInit, regComplete))
+	if serverComplete, err := serverAuth.Complete(&userInit, regComplete); err != nil {
+		return err
+	} else if err = sendMessage(c, 'a', serverComplete); err != nil {
+		return err
+	}
+	// Since we are using an embedded key exchange, we have one more step which
+	// receives another user message and validates it.
+	var userComplete gopaque.UserAuthComplete
+	if err := recvMessage(c, &userComplete); err != nil {
+		return err
+	}
+	return serverAuth.Finish(&userComplete)
 }
 
 // Below is just a very simple, insecure conn messager

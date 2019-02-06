@@ -12,11 +12,9 @@ func TestCryptoAuthEncrypt(t *testing.T) {
 	key := crypto.NewKey(nil)
 	// Just enc some value then decrypt for now
 	plain := []byte("foo")
-	if encBytes, err := crypto.AuthEncrypt(key, plain); err != nil {
-		t.Fatal(err)
-	} else if decBytes, err := crypto.AuthDecrypt(key, encBytes); err != nil {
-		t.Fatal(err)
-	} else if !bytes.Equal(decBytes, plain) {
-		t.Fatalf("Mismatch, got %v wanted %v", decBytes, plain)
-	}
+	encBytes, err := crypto.AuthEncrypt(key, plain)
+	assertNoErr(t, err)
+	decBytes, err := crypto.AuthDecrypt(key, encBytes)
+	assertNoErr(t, err)
+	assert(t, bytes.Equal(decBytes, plain), "Mismatch, got %v wanted %v", decBytes, plain)
 }
