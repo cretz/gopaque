@@ -5,7 +5,7 @@ import (
 	"encoding/binary"
 	"io"
 
-	"go.dedis.ch/kyber"
+	"go.dedis.ch/kyber/v3"
 )
 
 // Marshaler is implemented by any message that can be marshaled to/from bytes.

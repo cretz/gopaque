@@ -5,7 +5,7 @@ import (
 	"crypto/hmac"
 	"fmt"
 
-	"go.dedis.ch/kyber"
+	"go.dedis.ch/kyber/v3"
 )
 
 // KeyExchange describes a 2-step or 3-step key exchange. Although

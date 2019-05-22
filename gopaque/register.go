@@ -3,7 +3,7 @@ package gopaque
 import (
 	"bytes"
 
-	"go.dedis.ch/kyber"
+	"go.dedis.ch/kyber/v3"
 )
 
 // UserRegister is the user-side session for registration with a server. This

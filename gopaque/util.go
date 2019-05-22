@@ -4,7 +4,7 @@ import (
 	"encoding"
 	"io"
 
-	"go.dedis.ch/kyber"
+	"go.dedis.ch/kyber/v3"
 )
 
 // toBytes assumes the given value should not fail to marshal.

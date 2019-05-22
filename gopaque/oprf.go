@@ -1,7 +1,7 @@
 package gopaque
 
 import (
-	"go.dedis.ch/kyber"
+	"go.dedis.ch/kyber/v3"
 )
 
 // OPRFUserStep1 is executed on the user side and builds values to pass to

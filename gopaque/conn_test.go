@@ -7,7 +7,7 @@ import (
 	"net"
 
 	"github.com/cretz/gopaque/gopaque"
-	"go.dedis.ch/kyber"
+	"go.dedis.ch/kyber/v3"
 )
 
 // This example is a more complex example showing marshalling and using separate

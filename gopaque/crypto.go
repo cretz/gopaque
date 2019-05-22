@@ -11,11 +11,11 @@ import (
 	"crypto/aes"
 	"crypto/hmac"
 
-	"go.dedis.ch/kyber"
-	"go.dedis.ch/kyber/sign/schnorr"
-	"go.dedis.ch/kyber/suites"
-	"go.dedis.ch/kyber/util/key"
-	"go.dedis.ch/kyber/util/random"
+	"go.dedis.ch/kyber/v3"
+	"go.dedis.ch/kyber/v3/sign/schnorr"
+	"go.dedis.ch/kyber/v3/suites"
+	"go.dedis.ch/kyber/v3/util/key"
+	"go.dedis.ch/kyber/v3/util/random"
 	"golang.org/x/crypto/hkdf"
 )
 

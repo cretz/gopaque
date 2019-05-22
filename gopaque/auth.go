@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"fmt"
 
-	"go.dedis.ch/kyber"
+	"go.dedis.ch/kyber/v3"
 )
 
 // UserAuth is the user-side authentication session for a registered user. The
