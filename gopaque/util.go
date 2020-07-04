@@ -33,10 +33,14 @@ func (r *readerStream) XORKeyStream(dst, src []byte) {
 	if len(dst) < l {
 		panic("dst too short")
 	}
-	if _, err := io.ReadFull(r, dst[:l]); err != nil {
-		panic(err)
+
+	buffKey := make([]byte, 32)
+	_, err := io.ReadFull(r, buffKey)
+	if err != nil {
+		panic("reader failed")
 	}
+
 	for i := 0; i < l; i++ {
-		dst[i] = src[i] ^ dst[i]
+		dst[i] = src[i] ^ buffKey[i]
 	}
 }

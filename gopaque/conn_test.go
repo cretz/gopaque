@@ -1,6 +1,7 @@
 package gopaque_test
 
 import (
+	"bytes"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -44,8 +45,13 @@ func Example_withConnPipe() {
 		panic(err)
 	}
 
+	// Convert Scalar to binary
+	a, err := key.MarshalBinary()
+	panicIfErr(err)
+	b, err := authInfo.UserPrivateKey.MarshalBinary()
+	panicIfErr(err)
 	// Confirm the key pair is what we registered with
-	if !key.Equal(authInfo.UserPrivateKey) {
+	if !bytes.Equal(a, b) {
 		panic("Invalid key")
 	}
 

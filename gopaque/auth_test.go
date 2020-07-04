@@ -1,6 +1,9 @@
 package gopaque_test
 
 import (
+	"bytes"
+	"fmt"
+
 	"github.com/cretz/gopaque/gopaque"
 )
 
@@ -11,7 +14,7 @@ func Example_simple() {
 	userReg := gopaque.NewUserRegister(crypto, []byte("user foo"), nil)
 	serverReg := gopaque.NewServerRegister(crypto, crypto.NewKey(nil))
 	// Do the registration steps
-	userRegInit := userReg.Init([]byte("password foo"))
+	userRegInit := userReg.Init([]byte("password"))
 	serverRegInit := serverReg.Init(userRegInit)
 	userRegComplete := userReg.Complete(serverRegInit)
 	serverRegComplete := serverReg.Complete(userRegComplete)
@@ -24,7 +27,7 @@ func Example_simple() {
 	userAuth := gopaque.NewUserAuth(crypto, []byte("user foo"), gopaque.NewKeyExchangeSigma(crypto))
 	serverAuth := gopaque.NewServerAuth(crypto, gopaque.NewKeyExchangeSigma(crypto))
 	// Do the auth
-	userAuthInit, err := userAuth.Init([]byte("password foo"))
+	userAuthInit, err := userAuth.Init([]byte("password"))
 	panicIfErr(err)
 	// XXX: Here is where serverRegComplete would be looked up by userAuthInit.UserID.
 	serverAuthComplete, err := serverAuth.Complete(userAuthInit, serverRegComplete)
@@ -33,10 +36,14 @@ func Example_simple() {
 	panicIfErr(err)
 	err = serverAuth.Finish(userAuthComplete)
 	panicIfErr(err)
-
+	a, err := userReg.PrivateKey().MarshalBinary()
+	panicIfErr(err)
+	b, err := userAuthFinish.UserPrivateKey.MarshalBinary()
+	panicIfErr(err)
 	// Might as well check that the user key is the same as orig
-	if !userReg.PrivateKey().Equal(userAuthFinish.UserPrivateKey) {
-		panic("Key mismatch")
+	if !bytes.Equal(a, b) {
+		fmt.Printf("Key mismatch\n"+
+			"user reg. key: %v\nuser auth. key: %v", userReg.PrivateKey(), userAuthFinish.UserPrivateKey)
 	}
 
 	// Output:

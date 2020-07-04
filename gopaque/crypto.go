@@ -118,7 +118,10 @@ func (c *CryptoStandard) NewKeyFromReader(r io.Reader) kyber.Scalar {
 	if r == nil {
 		return c.NewKey(nil)
 	}
-	return c.NewKey(&readerStream{r})
+	// Implements a particular struct from util.go
+	//return c.NewKey(&readerStream{r})
+	// Implements a particular utility to turn a io.Reader into a cipher.Stream from kyber library
+	return c.NewKey(random.New(r))
 }
 
 // HashToPoint implements PointHasher.HashToPoint.
