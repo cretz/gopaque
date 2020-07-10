@@ -1,4 +1,4 @@
-# Gopaque [![GoDoc](https://godoc.org/github.com/cretz/gopaque/gopaque?status.svg)](https://godoc.org/github.com/cretz/gopaque/gopaque)
+# Gopaque [![Go.Dev reference](https://img.shields.io/badge/go.dev-reference-blue?logo=go&logoColor=white)](https://pkg.go.dev/cretz/gopaque/gopaque?tab=doc)
 
 Gopaque implements the OPAQUE protocol in Go. OPAQUE is a way to register users with a server without having to send the
 user's password to the server during registration or authentication. An introduction to OPAQUE (and PAKEs in general)
@@ -11,7 +11,7 @@ To install:
 
     go get -u github.com/cretz/gopaque/gopaque
 
-The documentation, API, and examples are in the [Godoc](https://godoc.org/github.com/cretz/gopaque/gopaque).
+The documentation, API, and examples are in the [Godoc](https://pkg.go.dev/cretz/gopaque/gopaque?tab=doc).
 
 **WARNING: This is a trivial implementation, the author is not a cryptographer, and the code has not been reviewed. Use
 at your own risk.**
