@@ -22,7 +22,6 @@ func TestCryptoAuthEncrypt(t *testing.T) {
 func TestDeriveKey(t *testing.T) {
 	crypto := gopaque.CryptoDefault
 	key := crypto.NewKey(nil)
-	//keyBytes := []byte("password") // It will produce and error on key lenght
 	// Just enc some value then decrypt for now
 	plain := []byte("foo")
 
@@ -51,8 +50,9 @@ func TestDeriveKey(t *testing.T) {
 
 	authDecKey2 := crypto.NewKeyFromReader(bytes.NewReader(keyRandBytes))
 	decBytes, err = crypto.AuthDecrypt(authDecKey2, encBytes)
-	assert(t, false == bytes.Equal(decBytes, plain),
-		"Match. A successful decryption occurred\nKey 1: %v\n\tEncryption key: %v\n\tDecryption key: %v\nKey 2 :%v\n\tDecryption key: %v", keyBytes, authEncKey, authDecKey, keyRandBytes, authDecKey2)
+	assert(t, !bytes.Equal(decBytes, plain), "Match. A successful decryption occurred\n"+
+		"Key 1: %v\n\tEncryption key: %v\n\tDecryption key: %v\nKey 2 :%v\n\tDecryption key: %v",
+		keyBytes, authEncKey, authDecKey, keyRandBytes, authDecKey2)
 }
 
 func TestCryptoAuthInvalidKey(t *testing.T) {
@@ -66,12 +66,9 @@ func TestCryptoAuthInvalidKey(t *testing.T) {
 	encBytes, err := crypto.AuthEncrypt(encKey, plain)
 	assertNoErr(t, err)
 
-	// Decrypt with Key 2
-	decBytes, err := crypto.AuthDecrypt(decKey, encBytes)
-	assertNoErr(t, err)
-
-	//A new key should not be able to decrypt the original message
-	assert(t, !bytes.Equal(plain, decBytes), "Decrypted message with a different key")
+	// Decrypt with Key 2 and confirm it errors
+	_, err = crypto.AuthDecrypt(decKey, encBytes)
+	assert(t, err != nil && err.Error() == "MAC mismatch", "Expected 'MAC mismatch' error, got: %v", err)
 }
 
 func TestCryptoRandomStream(t *testing.T) {
